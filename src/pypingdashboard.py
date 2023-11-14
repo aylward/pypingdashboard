@@ -1,131 +1,193 @@
+"""
+Dashboard webpage summarizing PingRecorder results
 
-import subprocess
-import time
-from datetime import datetime,timedelta
+Apache 2.0 License
+
+Copyright: Stephen Aylward
+"""
+
+import threading
 
 import numpy as np
-import re
-
-import speedtest
 
 import dash
-from dash import dcc
-from dash import html
+from dash import dcc, html
 from dash.dependencies import Input, Output
+
 import plotly.graph_objects as go
-import plotly.express as px
 
-# Global variables to store the data
-timestamps = []
-ping_data = {website: {'avg': [], 'jitter': []} for website in ['google.com', 'example.com', 'openai.com']}
-speed_data = {'download': [], 'upload': []}
-
-def measure_ping(host):
-    ping = subprocess.check_output(["ping", "-n", "5", host]).decode("utf-8") 
-
-    times_start = [m.start() for m in re.finditer("time=",ping)]
-    times = [ping[t:].split("=")[1].split(" ")[0] for t in times_start[1:]]
-    ping_times = [float(time_[:-2]) for time_ in times]
-    
-    avg_ping = np.mean(ping_times) # Average ping time
-    min_ping = min(ping_times)
-    max_ping = max(ping_times)
-    jitter = abs(max_ping-min_ping)  # Jitter is the absolute difference between min and max ping times
-
-    return avg_ping, jitter
-
-def measure_speed():
-    st = speedtest.Speedtest()
-    download_speed = st.download() / 10**6  # convert to Mbps
-    upload_speed = st.upload() / 10**6  # convert to Mbps
-    return download_speed, upload_speed
-
-def record_data():
-    global timestamps, ping_data, speed_data
-
-    while True:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        timestamps.append(timestamp)
-
-        # Remove data older than 240 hours (10 days)
-        if timestamps:
-            oldest_timestamp = datetime.strptime(timestamps[0], "%Y-%m-%d %H:%M:%S")
-            while oldest_timestamp < datetime.now() - timedelta(hours=240):
-                timestamps.pop(0)
-                for website in ping_data:
-                    ping_data[website]['avg'].pop(0)
-                    ping_data[website]['jitter'].pop(0)
-                speed_data['download'].pop(0)
-                speed_data['upload'].pop(0)
-
-        # Measure ping for each website every minute
-        for website in ping_data:
-            ping_results = measure_ping(website)
-            ping_data[website]['avg'].append(ping_results[0])
-            ping_data[website]['jitter'].append(ping_results[1])
-
-        # Measure speed every 30 minutes
-        if len(timestamps) % 30 == 1: 
-            download_speed, upload_speed = measure_speed()
-            speed_data['download'].append(download_speed)
-            speed_data['upload'].append(upload_speed)
-
-        time.sleep(60)  # Record ping every 5 seconds
-
+from pypingrecorder import PingRecorder
 
 # Create Dash app
 app = dash.Dash(__name__)
 
 # Define the layout of the app
-app.layout = html.Div(children=[
-    dcc.Graph(id='ping-graph'),
-    dcc.Graph(id='speed-graph')
-])
+app.layout = html.Div(
+    className="row",
+    children=[
+        html.H1("Ping Dashboard"),
+        html.Div(
+            children=[
+                dcc.Graph(id="ping-time-graph", style={"display": "inline-block"}),
+                dcc.Graph(id="ping-histo-graph", style={"display": "inline-block"}),
+                dcc.Graph(id="speed-time-graph", style={"display": "inline-block"}),
+                dcc.Graph(id="speed-histo-graph", style={"display": "inline-block"}),
+            ]
+        ),
+        dcc.Interval(interval=5000),
+    ],
+)
+
+pr = PingRecorder()
+
 
 # Define callback to update the graphs
 @app.callback(
-    [Output('ping-graph', 'figure'),
-     Output('speed-graph', 'figure')],
-    [Input('ping-graph', 'relayoutData'),
-     Input('speed-graph', 'relayoutData')]
+    [
+        Output("ping-time-graph", "figure"),
+        Output("ping-histo-graph", "figure"),
+        Output("speed-time-graph", "figure"),
+        Output("speed-histo-graph", "figure"),
+    ],
+    [
+        Input("ping-time-graph", "relayoutData"),
+        Input("ping-histo-graph", "relayoutData"),
+        Input("speed-time-graph", "relayoutData"),
+        Input("speed-histo-graph", "relayoutData"),
+    ],
 )
-def update_graphs(ping_layout, speed_layout):
-    global timestamps, ping_data, speed_data
+def update_graphs(
+    ping_time_layout,
+    ping_histo_layout,
+    speed_time_layout,
+    speed_histo_layout
+):
+    """ 
+    Generate time-series and histograms of ping and up/download tests
+    """
+    # pylint: disable=unused-argument
 
-
-    # Create a combined time series plot for average and jitter for each website
-    ping_fig = go.Figure()
-    for website in ping_data:
-        ping_fig.add_trace(go.Scatter(x=timestamps, y=ping_data[website]['avg'],
-                                      error_y=dict(
-                                          type='data',
-                                          array = ping_data[website]['jitter'],
-                                          visible=True
-                                          ),
-                                      name=f'{website}',
-                                      ))
-    ping_fig.update_layout(title='Ping Time and Jitter Time Series',
-                           xaxis_title='Timestamp', yaxis_title='Value')
+    pr.compute_statistics()
+    ping_time_fig = go.Figure()
+    for website_num, website in enumerate(pr.ping_data):
+        color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
+        err = np.array(pr.ping_data[website]["jitter"])
+        err = err / 2.0
+        ping_time_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_data[website]["timestamp"],
+                y=pr.ping_data[website]["avg"],
+                name=f"{website} Avg",
+                line={"color": color, "dash": "solid"},
+            )
+        )
+        ping_time_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_data[website]["timestamp"],
+                y=pr.ping_data[website]["max"],
+                name=f"{website} Max",
+                line={"color": color, "dash": "dot"},
+            )
+        )
+        ping_time_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_data[website]["timestamp"],
+                y=pr.ping_data[website]["jitter"],
+                name=f"{website} Jitter",
+                line={"color": color, "dash": "dash"},
+            )
+        )
+        ping_time_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_data[website]["timestamp"],
+                y=pr.ping_data[website]["errors"],
+                name=f"{website} Errors",
+                line={"color": color, "dash": "dashdot"},
+            )
+        )
+    ping_time_fig.update_layout(
+        title="Ping Time and Jitter Time Series",
+        xaxis_title="Timestamp",
+        yaxis_title="Value",
+    )
 
     # Create a time series plot for download and upload speeds
-    speed_fig = go.Figure()
-    speed_fig.add_trace(go.Scatter(x=timestamps, y=speed_data['download'],
-                                   mode='lines',
-                                   name='Download'))
-    speed_fig.add_trace(go.Scatter(x=timestamps, y=speed_data['upload'],
-                                   mode='lines',
-                                   name='Upload'))
-    speed_fig.update_layout(title='Speed',
-                            xaxis_title='Timestamp', yaxis_title='Speed (Mbps)')
+    speed_time_fig = go.Figure()
+    speed_time_fig.add_trace(
+        go.Scatter(
+            x=pr.speed_data["timestamp"],
+            y=pr.speed_data["download"],
+            mode="lines",
+            name="Download",
+        )
+    )
+    speed_time_fig.add_trace(
+        go.Scatter(
+            x=pr.speed_data["timestamp"],
+            y=pr.speed_data["upload"],
+            mode="lines",
+            name="Upload",
+        )
+    )
+    speed_time_fig.update_layout(
+        title="Speed", xaxis_title="Timestamp", yaxis_title="Speed (Mbps)"
+    )
 
-    return ping_fig, speed_fig
+    ## Ping Histo
+    ping_histo_fig = go.Figure()
+    for website_num, website in enumerate(pr.ping_data):
+        color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
+        ping_histo_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_histo_bins,
+                y=pr.ping_data[website]["avg_histo"],
+                name=f"{website} Avg",
+                line={"color": color, "dash": "solid"},
+            )
+        )
+        ping_histo_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_histo_bins,
+                y=pr.ping_data[website]["max_histo"],
+                name=f"{website} Max",
+                line={"color": color, "dash": "dot"},
+            )
+        )
+        ping_histo_fig.add_trace(
+            go.Scatter(
+                x=pr.ping_histo_bins,
+                y=pr.ping_data[website]["jitter_histo"],
+                name=f"{website} Jitter",
+                line={"color": color, "dash": "dash"},
+            )
+        )
+    ping_histo_fig.update_layout(
+        title="Ping Avg and Max Histograms",
+        xaxis_title="ms",
+        yaxis_title="Frequency",
+    )
 
-if __name__ == '__main__':
-    # Start recording data in a separate thread
-    import threading
-    record_thread = threading.Thread(target=record_data)
-    record_thread.start()
+    speed_histo_fig = go.Figure()
+    speed_histo_fig.add_trace(
+        go.Scatter(
+            x=pr.speed_histo_bins,
+            y=pr.speed_data["download_histo"],
+            name="Download",
+        )
+    )
+    speed_histo_fig.add_trace(
+        go.Scatter(
+            x=pr.speed_histo_bins,
+            y=pr.speed_data["upload_histo"],
+            name="Upload",
+        )
+    )
 
-    # Run the Dash app
-    app.run_server(debug=True, use_reloader=False)
+    return ping_time_fig, ping_histo_fig, speed_time_fig, speed_histo_fig
 
+
+record_thread = threading.Thread(target=pr.record_data)
+record_thread.start()
+
+# Run the Dash app
+app.run_server(debug=True, use_reloader=True)
