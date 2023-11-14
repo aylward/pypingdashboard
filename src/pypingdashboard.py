@@ -34,7 +34,10 @@ app.layout = html.Div(
                 dcc.Graph(id="speed-histo-graph", style={"display": "inline-block"}),
             ]
         ),
-        dcc.Interval(interval=5000),
+        dcc.Interval(
+            id='interval-component',
+            interval=5000,
+            n_intervals=0),
     ],
 )
 
@@ -50,18 +53,10 @@ pr = PingRecorder()
         Output("speed-histo-graph", "figure"),
     ],
     [
-        Input("ping-time-graph", "relayoutData"),
-        Input("ping-histo-graph", "relayoutData"),
-        Input("speed-time-graph", "relayoutData"),
-        Input("speed-histo-graph", "relayoutData"),
+        Input("interval-component", "n_intervals"),
     ],
 )
-def update_graphs(
-    ping_time_layout,
-    ping_histo_layout,
-    speed_time_layout,
-    speed_histo_layout
-):
+def update_graphs(n):
     """ 
     Generate time-series and histograms of ping and up/download tests
     """
