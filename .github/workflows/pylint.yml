@@ -18,7 +18,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-        pip install numpy, pandas, plotly, dash, speedtest-cli
+        pip install numpy
+        pip install pandas
+        pip install plotly
+        pip install dash
+        pip install speedtest-cli
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')
