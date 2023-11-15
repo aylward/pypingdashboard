@@ -57,7 +57,7 @@ pr = PingRecorder()
     ],
 )
 def update_graphs(n):
-    """ 
+    """
     Generate time-series and histograms of ping and up/download tests
     """
     # pylint: disable=unused-argument
@@ -181,7 +181,7 @@ def update_graphs(n):
                 name="Upload",
             )
         )
-    
+
     return ping_time_fig, ping_histo_fig, speed_time_fig, speed_histo_fig
 
 

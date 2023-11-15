@@ -184,7 +184,7 @@ class PingRecorder:
                     data,
                     bins=self.ping_histo_bins,
                 )[0]
-    
+
         winsize = int(
             min(
                 self.statistics_kernel_hours * 60 / self.speed_interval_minutes,
