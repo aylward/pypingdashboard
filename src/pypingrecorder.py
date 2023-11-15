@@ -135,7 +135,7 @@ class PingRecorder:
                 self.ping_data[website]["errors"].append(data_errors)
 
             speed_interval_count = self.speed_interval_minutes * (
-                60 / self.ping_interval_seconds
+                60.0 / self.ping_interval_seconds
             )
             if time_count > speed_interval_count:
                 time_count = 0
@@ -169,34 +169,36 @@ class PingRecorder:
                     len(self.ping_data[website]["value"]),
                 )
             )
-            data = self.ping_data[website]["max"][-winsize:]
-            self.ping_data[website]["max_histo"], self.ping_histo_bins = np.histogram(
-                data, bins=50, range=(0, rng_max)
-            )
-            data = self.ping_data[website]["avg"][-winsize:]
-            self.ping_data[website]["avg_histo"] = np.histogram(
-                data,
-                bins=self.ping_histo_bins,
-            )[0]
-            data = self.ping_data[website]["jitter"][-winsize:]
-            self.ping_data[website]["jitter_histo"] = np.histogram(
-                data,
-                bins=self.ping_histo_bins,
-            )[0]
-
+            if winsize > 1:
+                data = self.ping_data[website]["max"][-winsize:]
+                self.ping_data[website]["max_histo"], self.ping_histo_bins = np.histogram(
+                    data, bins=50, range=(0, rng_max)
+                )
+                data = self.ping_data[website]["avg"][-winsize:]
+                self.ping_data[website]["avg_histo"] = np.histogram(
+                    data,
+                    bins=self.ping_histo_bins,
+                )[0]
+                data = self.ping_data[website]["jitter"][-winsize:]
+                self.ping_data[website]["jitter_histo"] = np.histogram(
+                    data,
+                    bins=self.ping_histo_bins,
+                )[0]
+    
         winsize = int(
             min(
                 self.statistics_kernel_hours * 60 / self.speed_interval_minutes,
                 len(self.speed_data["upload"]),
             )
         )
-        data = self.speed_data["download"][-winsize:]
-        self.speed_data["download_histo"], self.speed_histo_bins = np.histogram(
-            data,
-            bins=50,
-        )
-        data = self.speed_data["upload"][-winsize:]
-        self.speed_data["upload_histo"] = np.histogram(
-            data,
-            bins=self.speed_histo_bins,
-        )[0]
+        if winsize > 1:
+            data = self.speed_data["download"][-winsize:]
+            self.speed_data["download_histo"], self.speed_histo_bins = np.histogram(
+                data,
+                bins=50,
+            )
+            data = self.speed_data["upload"][-winsize:]
+            self.speed_data["upload_histo"] = np.histogram(
+                data,
+                bins=self.speed_histo_bins,
+            )[0]

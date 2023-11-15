@@ -34,7 +34,10 @@ app.layout = html.Div(
                 dcc.Graph(id="speed-histo-graph", style={"display": "inline-block"}),
             ]
         ),
-        dcc.Interval(interval=5000),
+        dcc.Interval(
+            id='interval-component',
+            interval=20000,
+            n_intervals=0),
     ],
 )
 
@@ -70,41 +73,42 @@ def update_graphs(
     pr.compute_statistics()
     ping_time_fig = go.Figure()
     for website_num, website in enumerate(pr.ping_data):
-        color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
-        err = np.array(pr.ping_data[website]["jitter"])
-        err = err / 2.0
-        ping_time_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_data[website]["timestamp"],
-                y=pr.ping_data[website]["avg"],
-                name=f"{website} Avg",
-                line={"color": color, "dash": "solid"},
+        if len(pr.ping_data[website]["timestamp"]) > 1:
+            color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
+            err = np.array(pr.ping_data[website]["jitter"])
+            err = err / 2.0
+            ping_time_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_data[website]["timestamp"],
+                    y=pr.ping_data[website]["avg"],
+                    name=f"{website} Avg",
+                    line={"color": color, "dash": "solid"},
+                )
             )
-        )
-        ping_time_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_data[website]["timestamp"],
-                y=pr.ping_data[website]["max"],
-                name=f"{website} Max",
-                line={"color": color, "dash": "dot"},
+            ping_time_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_data[website]["timestamp"],
+                    y=pr.ping_data[website]["max"],
+                    name=f"{website} Max",
+                    line={"color": color, "dash": "dot"},
+                )
             )
-        )
-        ping_time_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_data[website]["timestamp"],
-                y=pr.ping_data[website]["jitter"],
-                name=f"{website} Jitter",
-                line={"color": color, "dash": "dash"},
+            ping_time_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_data[website]["timestamp"],
+                    y=pr.ping_data[website]["jitter"],
+                    name=f"{website} Jitter",
+                    line={"color": color, "dash": "dash"},
+                )
             )
-        )
-        ping_time_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_data[website]["timestamp"],
-                y=pr.ping_data[website]["errors"],
-                name=f"{website} Errors",
-                line={"color": color, "dash": "dashdot"},
+            ping_time_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_data[website]["timestamp"],
+                    y=pr.ping_data[website]["errors"],
+                    name=f"{website} Errors",
+                    line={"color": color, "dash": "dashdot"},
+                )
             )
-        )
     ping_time_fig.update_layout(
         title="Ping Time and Jitter Time Series",
         xaxis_title="Timestamp",
@@ -113,76 +117,79 @@ def update_graphs(
 
     # Create a time series plot for download and upload speeds
     speed_time_fig = go.Figure()
-    speed_time_fig.add_trace(
-        go.Scatter(
-            x=pr.speed_data["timestamp"],
-            y=pr.speed_data["download"],
-            mode="lines",
-            name="Download",
+    if len(pr.speed_data["timestamp"]) > 1:
+        speed_time_fig.add_trace(
+            go.Scatter(
+                x=pr.speed_data["timestamp"],
+                y=pr.speed_data["download"],
+                mode="lines",
+                name="Download",
+            )
         )
-    )
-    speed_time_fig.add_trace(
-        go.Scatter(
-            x=pr.speed_data["timestamp"],
-            y=pr.speed_data["upload"],
-            mode="lines",
-            name="Upload",
+        speed_time_fig.add_trace(
+            go.Scatter(
+                x=pr.speed_data["timestamp"],
+                y=pr.speed_data["upload"],
+                mode="lines",
+                name="Upload",
+            )
         )
-    )
-    speed_time_fig.update_layout(
-        title="Speed", xaxis_title="Timestamp", yaxis_title="Speed (Mbps)"
-    )
+        speed_time_fig.update_layout(
+            title="Speed", xaxis_title="Timestamp", yaxis_title="Speed (Mbps)"
+        )
 
     ## Ping Histo
     ping_histo_fig = go.Figure()
-    for website_num, website in enumerate(pr.ping_data):
-        color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
-        ping_histo_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_histo_bins,
-                y=pr.ping_data[website]["avg_histo"],
-                name=f"{website} Avg",
-                line={"color": color, "dash": "solid"},
+    if len(pr.ping_histo_bins)>1:
+        for website_num, website in enumerate(pr.ping_data):
+            color = ping_time_fig.layout["template"]["layout"]["colorway"][website_num]
+            ping_histo_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_histo_bins,
+                    y=pr.ping_data[website]["avg_histo"],
+                    name=f"{website} Avg",
+                    line={"color": color, "dash": "solid"},
+                )
             )
-        )
-        ping_histo_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_histo_bins,
-                y=pr.ping_data[website]["max_histo"],
-                name=f"{website} Max",
-                line={"color": color, "dash": "dot"},
+            ping_histo_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_histo_bins,
+                    y=pr.ping_data[website]["max_histo"],
+                    name=f"{website} Max",
+                    line={"color": color, "dash": "dot"},
+                )
             )
-        )
-        ping_histo_fig.add_trace(
-            go.Scatter(
-                x=pr.ping_histo_bins,
-                y=pr.ping_data[website]["jitter_histo"],
-                name=f"{website} Jitter",
-                line={"color": color, "dash": "dash"},
+            ping_histo_fig.add_trace(
+                go.Scatter(
+                    x=pr.ping_histo_bins,
+                    y=pr.ping_data[website]["jitter_histo"],
+                    name=f"{website} Jitter",
+                    line={"color": color, "dash": "dash"},
+                )
             )
+        ping_histo_fig.update_layout(
+            title="Ping Avg and Max Histograms",
+            xaxis_title="ms",
+            yaxis_title="Frequency",
         )
-    ping_histo_fig.update_layout(
-        title="Ping Avg and Max Histograms",
-        xaxis_title="ms",
-        yaxis_title="Frequency",
-    )
 
     speed_histo_fig = go.Figure()
-    speed_histo_fig.add_trace(
-        go.Scatter(
-            x=pr.speed_histo_bins,
-            y=pr.speed_data["download_histo"],
-            name="Download",
+    if len(pr.speed_histo_bins) > 1:
+        speed_histo_fig.add_trace(
+            go.Scatter(
+                x=pr.speed_histo_bins,
+                y=pr.speed_data["download_histo"],
+                name="Download",
+            )
         )
-    )
-    speed_histo_fig.add_trace(
-        go.Scatter(
-            x=pr.speed_histo_bins,
-            y=pr.speed_data["upload_histo"],
-            name="Upload",
+        speed_histo_fig.add_trace(
+            go.Scatter(
+                x=pr.speed_histo_bins,
+                y=pr.speed_data["upload_histo"],
+                name="Upload",
+            )
         )
-    )
-
+    
     return ping_time_fig, ping_histo_fig, speed_time_fig, speed_histo_fig
 
 
